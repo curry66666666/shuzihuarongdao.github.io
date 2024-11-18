@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据华容道</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #e0f7fa;
+        }
+        .game-container {
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        .puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tile {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: #42a5f5;
+            color: white;
+            font-size: 24px;
+            line-height: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            border-radius: 5px;
+            transition: transform 0.1s ease-in-out;
+        }
+        .tile:hover {
+            transform: scale(1.05);
+        }
+        .empty-tile {
+            background-color: transparent;
+            cursor: default;
+            box-shadow: none;
+        }
+        .info {
+            margin-top: 20px;
+        }
+        .info p {
+            margin: 5px 0;
+            font-size: 18px;
+        }
+        .info button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .info button:hover {
+            background-color: #1565c0;
+        }
+        .history {
+            margin-top: 20px;
+            text-align: left;
+        }
+        .history h3 {
+            margin: 0 0 10px 0;
+            font-size: 20px;
+        }
+        .history p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div id="puzzle-board" class="puzzle-board"></div>
+        <div class="info">
+            <p>用时: <span id="time">00:00</span></p>
+            <p>步数: <span id="moves">0</span></p>
+            <button onclick="resetGame()">重新开始</button>
+        </div>
+        <div class="history">
+            <h3>历史最佳记录</h3>
+            <p>最短用时: <span id="best-time">--:--</span></p>
+            <p>最少步数: <span id="best-moves">--</span></p>
+        </div>
+    </div>
+
+    <script>
+        const boardSize = 3;
+        let tiles = [];
+        let emptyTileIndex = boardSize * boardSize - 1;
+        let moves = 0;
+        let startTime;
+        let intervalId;
+        let bestTime = JSON.parse(localStorage.getItem('bestTime')) || '--:--';
+        let bestMoves = JSON.parse(localStorage.getItem('bestMoves')) || '--';
+
+        document.getElementById('best-time').textContent = bestTime;
+        document.getElementById('best-moves').textContent = bestMoves;
+
+        function initializeBoard() {
+            tiles = [];
+            for (let i = 0; i < boardSize * boardSize - 1; i++) {
+                tiles.push(i + 1);
+            }
+            tiles.push(null);
+
+            shuffleTiles();
+            renderBoard();
+        }
+
+        function shuffleTiles() {
+            for (let i = tiles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+            }
+            emptyTileIndex = tiles.indexOf(null);
+        }
+
+        function renderBoard() {
+            const puzzleBoard = document.getElementById('puzzle-board');
+            puzzleBoard.innerHTML = ''; // 清空现有内容
+            tiles.forEach((tile, index) => {
+                const tileElement = document.createElement('div');
+                tileElement.classList.add('tile');
+                if (tile === null) {
+                    tileElement.classList.add('empty-tile');
+                } else {
+                    tileElement.textContent = tile;
+                    tileElement.onclick = () => moveTile(index);
+                }
+                puzzleBoard.appendChild(tileElement);
+            });
+        }
+
+        function moveTile(index) {
+            const rowDiff = Math.abs(Math.floor(index / boardSize) - Math.floor(emptyTileIndex / boardSize));
+            const colDiff = Math.abs(index % boardSize - emptyTileIndex % boardSize);
+
+            if ((rowDiff === 0 && colDiff === 1) || (colDiff === 0 && rowDiff === 1)) {
+                [tiles[index], tiles[emptyTileIndex]] = [tiles[emptyTileIndex], tiles[index]];
+                emptyTileIndex = index;
+                moves++;
+                document.getElementById('moves').textContent = moves;
+                renderBoard();
+
+                if (isSolved()) {
+                    clearInterval(intervalId);
+                    checkBestRecord();
+                    alert(`恭喜你完成！用时: ${document.getElementById('time').textContent} 步数: ${moves}`);
+                }
+            }
+        }
+
+        function isSolved() {
+            return tiles.every((tile, index) => tile === index + 1 || tile === null);
+        }
+
+        function startTimer() {
+            startTime = Date.now();
+            intervalId = setInterval(() => {
+                const elapsedTime = Date.now() - startTime;
+                const minutes = Math.floor(elapsedTime / 60000).toString().padStart(2, '0');
+                const seconds = Math.floor((elapsedTime % 60000) / 1000).toString().padStart(2, '0');
+                document.getElementById('time').textContent = `${minutes}:${seconds}`;
+            }, 1000);
+        }
+
+        function resetGame() {
+            clearInterval(intervalId);
+            moves = 0;
+            document.getElementById('moves').textContent = moves;
+            document.getElementById('time').textContent = '00:00';
+            initializeBoard();
+            startTimer();
+        }
+
+        function checkBestRecord() {
+            const currentTime = document.getElementById('time').textContent;
+            const currentMoves = parseInt(document.getElementById('moves').textContent, 10);
+
+            if (bestTime === '--:--' || convertToSeconds(currentTime) < convertToSeconds(bestTime)) {
+                bestTime = currentTime;
+                localStorage.setItem('bestTime', JSON.stringify(bestTime));
+                document.getElementById('best-time').textContent = bestTime;
+            }
+
+            if (bestMoves === '--' || currentMoves < parseInt(bestMoves, 10)) {
+                bestMoves = currentMoves.toString();
+                localStorage.setItem('bestMoves', JSON.stringify(bestMoves));
+                document.getElementById('best-moves').textContent = bestMoves;
+            }
+        }
+
+        function convertToSeconds(time) {
+            const [minutes, seconds] = time.split(':').map(Number);
+            return minutes * 60 + seconds;
+        }
+
+        initializeBoard();
+        startTimer();
+    </script>
+</body>
+</html>
+
+
+
